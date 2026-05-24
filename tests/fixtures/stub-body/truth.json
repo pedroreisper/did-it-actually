@@ -1,0 +1,4 @@
+{
+  "expected_verdict": "NOT VERIFIED",
+  "notes": "app.py contains `raise NotImplementedError` in the function body. The no-stub-bodies critical check should flag this."
+}

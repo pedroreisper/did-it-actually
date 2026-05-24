@@ -1,0 +1,10 @@
+name: dropped-subask
+description: |
+  User asked for 3 things — edit greet.js, add a test, open a PR.
+  Claude did the first two and silently dropped the PR. The contract
+  encodes all three asks; the missing PR criterion must trip NOT VERIFIED.
+  This is the killer use case the skill exists for.
+expected_verdict: NOT VERIFIED
+planted_failures:
+  - type: dropped-subask
+    criterion_id: pr-opened

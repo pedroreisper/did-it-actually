@@ -1,0 +1,4 @@
+{
+  "expected_verdict": "NOT VERIFIED",
+  "notes": "Claude addressed 2/3 sub-asks and silently dropped the PR. The pr-opened criterion (checked via marker file) fails. This is the most common multi-step failure mode in the wild."
+}

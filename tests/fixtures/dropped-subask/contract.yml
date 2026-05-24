@@ -1,0 +1,29 @@
+version: 1
+request: 'Update src/greet.js to add a goodbye() function, add a test, and open a PR.'
+created_at: 2026-05-25T00:00:00Z
+iteration: 1
+criteria:
+  - id: goodbye-defined
+    intent: greet.js defines a goodbye function
+    type: content
+    spec:
+      path: src/greet.js
+      must_match: 'function\s+goodbye|const\s+goodbye\s*='
+    severity: critical
+
+  - id: goodbye-test-exists
+    intent: a test file references goodbye
+    type: existence
+    spec:
+      must_exist_any:
+        - src/greet.test.js
+        - tests/greet.test.js
+    severity: critical
+
+  - id: pr-opened
+    intent: a PR was opened for this change
+    type: command
+    spec:
+      cmd: 'test -f .did-it-actually/pr-opened.marker'
+      expect_exit: 0
+    severity: critical

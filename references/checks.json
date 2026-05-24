@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Machine-readable definitions of every check the audit pipeline runs. Consumed by scripts/audit.sh.",
+  "checks": [
+    {
+      "id": "ledger-vs-diff",
+      "category": "claim-reconciliation",
+      "intent": "every claim in the ledger appears in git diff, and every git diff entry was claimed",
+      "evaluator": "deterministic",
+      "tool": "git diff --name-only HEAD",
+      "fail_condition": "set difference is non-empty in either direction",
+      "severity": "critical",
+      "fail_label": "phantom-edit OR missing-claim"
+    },
+    {
+      "id": "ledger-shas-match",
+      "category": "claim-reconciliation",
+      "intent": "each ledger row's sha_after matches the current sha of the file",
+      "evaluator": "deterministic",
+      "tool": "shasum -a 256",
+      "fail_condition": "any sha_after differs from current sha",
+      "severity": "critical",
+      "fail_label": "claim-content-mismatch"
+    },
+    {
+      "id": "contract-existence",
+      "category": "contract",
+      "intent": "files marked must_exist are present and at least min_bytes; must_not_exist are absent",
+      "evaluator": "deterministic",
+      "tool": "test -s / test ! -e",
+      "fail_condition": "file absent OR smaller than min_bytes OR exists when forbidden",
+      "severity": "from-contract",
+      "fail_label": "criterion-failed"
+    },
+    {
+      "id": "contract-content",
+      "category": "contract",
+      "intent": "files match (or do not match) the patterns specified in the contract",
+      "evaluator": "deterministic",
+      "tool": "grep -E / python -c 'import re'",
+      "fail_condition": "pattern absent when required OR present when forbidden",
+      "severity": "from-contract",
+      "fail_label": "criterion-failed"
+    },
+    {
+      "id": "contract-command",
+      "category": "contract",
+      "intent": "command exits as expected and stdout matches if specified",
+      "evaluator": "deterministic",
+      "tool": "bash (with timeout)",
+      "fail_condition": "exit code != expect_exit OR stdout fails expected pattern OR timeout reached",
+      "severity": "from-contract",
+      "fail_label": "criterion-failed"
+    },
+    {
+      "id": "contract-review",
+      "category": "contract",
+      "intent": "subjective criteria evaluated by the critic sub-agent",
+      "evaluator": "critic-agent",
+      "tool": "Task (general-purpose) with scripts/critic.md prompt",
+      "fail_condition": "critic returns status=fail with confidence ≥0.7",
+      "severity": "warning",
+      "fail_label": "review-failed"
+    },
+    {
+      "id": "no-todos",
+      "category": "syntactic-rot",
+      "intent": "no new TODO/FIXME/HACK/XXX/NOCOMMIT comments in changed files",
+      "evaluator": "deterministic",
+      "tool": "grep -EnH",
+      "patterns": [
+        "\\bTODO\\b",
+        "\\bFIXME\\b",
+        "\\bHACK\\b",
+        "\\bXXX\\b",
+        "\\bNOCOMMIT\\b"
+      ],
+      "fail_condition": "≥1 match in any changed file",
+      "severity": "warning",
+      "fail_label": "todo-left",
+      "suppressible_via": ".did-it-actually/ignore"
+    },
+    {
+      "id": "no-stub-bodies",
+      "category": "syntactic-rot",
+      "intent": "no NotImplementedError / 'not implemented' / Kotlin TODO() / Rust unimplemented!() / panic!('unimplemented')",
+      "evaluator": "deterministic",
+      "tool": "grep -EnH + AST walk where possible",
+      "patterns": [
+        "raise\\s+NotImplementedError",
+        "throw\\s+new\\s+Error\\(['\"]not\\s*implemented",
+        "\\bunimplemented!\\(\\)",
+        "panic!\\(['\"]unimplemented",
+        "TODO\\(\\)"
+      ],
+      "ast_checks": {
+        "python": "function body is exactly Pass | Constant(Ellipsis) | Raise(NotImplementedError-like)",
+        "typescript": "arrow function body is { throw new Error(...) } with /not.implemented/i in the message"
+      },
+      "fail_condition": "≥1 stub body in any changed file",
+      "severity": "critical",
+      "fail_label": "stub-shipped"
+    },
+    {
+      "id": "no-debug-leftovers",
+      "category": "syntactic-rot",
+      "intent": "no debug statements left in changed source files",
+      "evaluator": "deterministic",
+      "tool": "grep -EnH",
+      "patterns": [
+        "\\bconsole\\.log\\b",
+        "\\bdebugger\\b",
+        "\\bpdb\\.set_trace\\b",
+        "\\bbinding\\.pry\\b",
+        "\\bbyebug\\b",
+        "\\bdebug_print\\b"
+      ],
+      "fail_condition": "≥1 match in any changed non-test file",
+      "severity": "warning",
+      "fail_label": "debug-leftover",
+      "suppressible_via": ".did-it-actually/ignore"
+    },
+    {
+      "id": "syntax-valid",
+      "category": "structural",
+      "intent": "every changed file parses in its language",
+      "evaluator": "deterministic",
+      "tool": "language-specific compiler check",
+      "tool_map": {
+        ".py": "python -m py_compile",
+        ".js": "node --check",
+        ".mjs": "node --check",
+        ".cjs": "node --check",
+        ".ts": "tsc --noEmit --allowJs --skipLibCheck --target es2022",
+        ".tsx": "tsc --noEmit --allowJs --skipLibCheck --jsx react",
+        ".sh": "bash -n",
+        ".bash": "bash -n",
+        ".json": "python -m json.tool > /dev/null",
+        ".yaml": "python -c \"import yaml; yaml.safe_load(open(_))\"",
+        ".yml": "python -c \"import yaml; yaml.safe_load(open(_))\"",
+        ".toml": "python -c \"import tomllib; tomllib.load(open(_, 'rb'))\""
+      },
+      "fail_condition": "any non-zero exit",
+      "severity": "critical",
+      "fail_label": "syntax-error"
+    },
+    {
+      "id": "no-new-skipped-tests",
+      "category": "structural",
+      "intent": "no tests were skipped in this session that were not skipped before",
+      "evaluator": "deterministic",
+      "tool": "grep + diff vs pre.json",
+      "patterns": [
+        "\\.skip\\(",
+        "\\bxit\\(",
+        "\\bxtest\\(",
+        "@pytest\\.mark\\.skip",
+        "\\bt\\.Skip\\(",
+        "#\\[ignore\\]"
+      ],
+      "fail_condition": "any test file has a new skip not present in pre.json",
+      "severity": "critical",
+      "fail_label": "test-silenced"
+    },
+    {
+      "id": "swallowed-bash-failures",
+      "category": "session-history",
+      "intent": "no Bash tool call in this session exited non-zero without being addressed",
+      "evaluator": "deterministic",
+      "tool": "scripts/scan_session.py",
+      "fail_condition": "any session Bash call has exit_code != 0 and no later message references the failure",
+      "severity": "warning",
+      "fail_label": "swallowed-failure"
+    },
+    {
+      "id": "critic-agreement",
+      "category": "fresh-context-critic",
+      "intent": "an independent critic, with no conversation history, agrees the contract is satisfied",
+      "evaluator": "critic-agent",
+      "tool": "Task (general-purpose) with scripts/critic.md prompt",
+      "inputs": [
+        "contract.yml",
+        "claims.jsonl",
+        "git diff HEAD"
+      ],
+      "fail_condition": "critic returns verdict != VERIFIED with confidence ≥0.7",
+      "severity": "critical",
+      "fail_label": "critic-disagrees"
+    }
+  ],
+  "severity_resolution": {
+    "from-contract": "use the criterion's own severity field",
+    "critical_to_verdict": "any critical failure → NOT VERIFIED",
+    "warning_to_verdict": "no criticals + any warning → VERIFIED WITH WARNINGS",
+    "clean_to_verdict": "no failures of any kind + critic confidence ≥0.8 → VERIFIED"
+  },
+  "iteration_policy": {
+    "max_iterations": 3,
+    "on_max_reached": "stop iterating; emit report with verdict=NOT VERIFIED + iteration_capped=true; surface unresolved criteria to user verbatim"
+  }
+}

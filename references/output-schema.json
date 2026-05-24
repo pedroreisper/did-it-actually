@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pedroreisper/did-it-actually/schemas/report-v1.json",
+  "title": "did-it-actually report v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "audit_id",
+    "started_at",
+    "completed_at",
+    "iteration",
+    "request_excerpt",
+    "contract_sha256",
+    "verdict",
+    "criteria_results",
+    "checks_results",
+    "follow_ups"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "report-v1"
+    },
+    "audit_id": {
+      "type": "string",
+      "description": "Stable identifier for this audit run; derived from sha256(contract.yml + claims.jsonl + git HEAD).",
+      "pattern": "^[a-f0-9]{12}$"
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "iteration": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "Which iteration of the fix-loop this audit represents (max 3)."
+    },
+    "iteration_capped": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the audit reached iteration 3 without VERIFIED — user must intervene."
+    },
+    "request_excerpt": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "First 200 chars of the original user request."
+    },
+    "contract_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 of contract.yml at audit time. Mid-iteration changes are flagged."
+    },
+    "scope": {
+      "type": "object",
+      "required": ["claimed_files", "diffed_files", "in_scope", "out_of_scope"],
+      "properties": {
+        "claimed_files": { "type": "array", "items": { "type": "string" } },
+        "diffed_files": { "type": "array", "items": { "type": "string" } },
+        "in_scope": { "type": "array", "items": { "type": "string" } },
+        "out_of_scope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files changed but not declared in the contract or the claim ledger."
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["VERIFIED", "VERIFIED WITH WARNINGS", "NOT VERIFIED", "AUDIT_FAILED"],
+      "description": "AUDIT_FAILED means the audit itself errored — verdict cannot be trusted."
+    },
+    "verdict_reason": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "One-line justification for the verdict."
+    },
+    "critic": {
+      "type": "object",
+      "required": ["verdict", "confidence", "findings"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["VERIFIED", "NOT VERIFIED"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["finding_id", "severity", "criterion_id", "evidence"],
+            "properties": {
+              "finding_id": { "type": "string" },
+              "severity": { "type": "string", "enum": ["critical", "warning", "info"] },
+              "criterion_id": { "type": "string" },
+              "evidence": {
+                "type": "string",
+                "description": "file:line citation, command + exit code, or quoted text — must be re-checkable."
+              },
+              "hypothesis": {
+                "type": "string",
+                "description": "What the critic thinks went wrong, in one sentence."
+              }
+            }
+          }
+        }
+      }
+    },
+    "criteria_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "intent", "status", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "intent": { "type": "string" },
+          "status": { "type": "string", "enum": ["PASS", "FAIL", "SKIP"] },
+          "skip_reason": { "type": "string" },
+          "evidence": {
+            "type": "string",
+            "description": "Required for PASS. Allowed forms: 'git-sha:<7> +N -M', 'exit:<n> cmd:\"<command>\"', 'bytes:<n> mtime:<epoch>', 'read:<path>:<L1-L2> matches /<regex>/', 'critic:<finding-id>'."
+          },
+          "duration_ms": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "checks_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check_id", "status"],
+        "properties": {
+          "check_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["PASS", "FAIL", "SKIP", "ERROR"] },
+          "skip_reason": { "type": "string" },
+          "error_message": { "type": "string" },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "line", "snippet"],
+              "properties": {
+                "file": { "type": "string" },
+                "line": { "type": "integer", "minimum": 1 },
+                "snippet": { "type": "string", "maxLength": 200 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "follow_ups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["priority", "verb", "object", "reason"],
+        "properties": {
+          "priority": { "type": "string", "enum": ["CRITICAL", "WARN", "INFO"] },
+          "verb": { "type": "string", "description": "Imperative — 'create', 'fix', 'remove', 'run', 'open'." },
+          "object": { "type": "string", "description": "What to act on, e.g. 'src/api/schema.ts'." },
+          "reason": { "type": "string", "maxLength": 200 },
+          "criterion_id": { "type": "string", "description": "Which contract criterion this addresses." }
+        }
+      }
+    },
+    "session_meta": {
+      "type": "object",
+      "properties": {
+        "tool_versions": { "type": "object", "additionalProperties": { "type": "string" } },
+        "git_head": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "cwd": { "type": "string" },
+        "mode": { "type": "string", "enum": ["git", "no-git-mtime"] }
+      }
+    },
+    "meta_audit": {
+      "type": "object",
+      "description": "Audit of the audit — caught silent skips, missing inputs, etc.",
+      "properties": {
+        "all_checks_ran": { "type": "boolean" },
+        "missing_inputs": { "type": "array", "items": { "type": "string" } },
+        "contract_mutated_mid_iteration": { "type": "boolean" }
+      }
+    }
+  }
+}

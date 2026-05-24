@@ -1,0 +1,8 @@
+name: stub-body
+description: |
+  Claude wrote a function with body `raise NotImplementedError` and called
+  it done. The no-stub-bodies check must catch this and return NOT VERIFIED.
+expected_verdict: NOT VERIFIED
+planted_failures:
+  - type: stub-body
+    file: app.py

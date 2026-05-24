@@ -1,0 +1,4 @@
+{
+  "expected_verdict": "VERIFIED",
+  "notes": "post/hello.txt exists and contains 'world'. All criteria pass; no rot."
+}

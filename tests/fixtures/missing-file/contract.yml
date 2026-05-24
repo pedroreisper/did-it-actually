@@ -1,0 +1,20 @@
+version: 1
+request: 'Add a rate limit utility module at src/api/rate-limit.ts that exports a rateLimit(ip, max, windowMs) function.'
+created_at: 2026-05-25T00:00:00Z
+iteration: 1
+criteria:
+  - id: rate-limit-module-exists
+    intent: rate-limit utility module exists at the standard path
+    type: existence
+    spec:
+      must_exist: src/api/rate-limit.ts
+      min_bytes: 50
+    severity: critical
+
+  - id: rate-limit-exports-function
+    intent: the module exports a rateLimit function
+    type: content
+    spec:
+      path: src/api/rate-limit.ts
+      must_match: 'export\s+function\s+rateLimit'
+    severity: critical

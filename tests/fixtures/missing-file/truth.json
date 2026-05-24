@@ -1,0 +1,4 @@
+{
+  "expected_verdict": "NOT VERIFIED",
+  "notes": "The claim ledger lists a created file that does not exist on disk. The phantom-edit detector should catch this."
+}

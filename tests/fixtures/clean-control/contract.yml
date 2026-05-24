@@ -1,0 +1,20 @@
+version: 1
+request: 'Create a file called hello.txt containing the word "world".'
+created_at: 2026-05-25T00:00:00Z
+iteration: 1
+criteria:
+  - id: hello-exists
+    intent: hello.txt exists
+    type: existence
+    spec:
+      must_exist: hello.txt
+      min_bytes: 1
+    severity: critical
+
+  - id: hello-contains-world
+    intent: hello.txt contains the word "world"
+    type: content
+    spec:
+      path: hello.txt
+      must_match: '\bworld\b'
+    severity: critical

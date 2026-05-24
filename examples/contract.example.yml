@@ -1,0 +1,60 @@
+version: 1
+request: |
+  Add a rate limit to /api/login — 5 requests per minute per IP.
+  Add a test. Make sure linting still passes.
+created_at: 2026-05-25T00:14:00Z
+iteration: 1
+criteria:
+  - id: rate-limit-module-exists
+    intent: a rate-limit utility module is created
+    type: existence
+    spec:
+      must_exist: src/api/rate-limit.ts
+      min_bytes: 200
+    severity: critical
+
+  - id: login-imports-rate-limit
+    intent: login.ts imports and uses the rate-limit utility
+    type: content
+    spec:
+      path: src/api/login.ts
+      must_match: 'from\s+["\047]\./rate-limit["\047]'
+      must_match_pcre: 'rateLimit\s*\(\s*req\.ip'
+    severity: critical
+
+  - id: rate-limit-is-five-per-minute
+    intent: limit is configured as 5 req / 60 s per IP
+    type: content
+    spec:
+      path: src/api/rate-limit.ts
+      must_match: '\b5\b'
+      must_match_pcre: 'window.*=.*60\s*[*x]?\s*1000|60_?000'
+    severity: critical
+
+  - id: test-exists
+    intent: a test file references the rate-limit behaviour
+    type: existence
+    spec:
+      must_exist_any:
+        - src/api/rate-limit.test.ts
+        - src/api/__tests__/rate-limit.test.ts
+        - tests/api/rate-limit.test.ts
+    severity: critical
+
+  - id: tests-pass
+    intent: npm test exits 0
+    type: command
+    spec:
+      cmd: npm test
+      expect_exit: 0
+      timeout_seconds: 120
+    severity: critical
+
+  - id: lint-clean
+    intent: eslint exits 0 on changed files
+    type: command
+    spec:
+      cmd: npm run lint -- --max-warnings 0
+      expect_exit: 0
+      timeout_seconds: 60
+    severity: critical

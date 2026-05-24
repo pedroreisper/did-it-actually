@@ -1,0 +1,1 @@
+Add a rate limit utility module at src/api/rate-limit.ts that exports a rateLimit(ip, max, windowMs) function.

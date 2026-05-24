@@ -1,0 +1,28 @@
+version: 1
+request: 'Implement the parse_user_input function in app.py to validate and return the parsed input dict.'
+created_at: 2026-05-25T00:00:00Z
+iteration: 1
+criteria:
+  - id: app-exists
+    intent: app.py exists
+    type: existence
+    spec:
+      must_exist: app.py
+      min_bytes: 50
+    severity: critical
+
+  - id: parse-user-input-defined
+    intent: parse_user_input function is defined
+    type: content
+    spec:
+      path: app.py
+      must_match: 'def\s+parse_user_input'
+    severity: critical
+
+  - id: parse-user-input-not-stub
+    intent: parse_user_input is implemented (not a NotImplementedError stub)
+    type: content
+    spec:
+      path: app.py
+      must_not_match: 'raise\s+NotImplementedError'
+    severity: critical
