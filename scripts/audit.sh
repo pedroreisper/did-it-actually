@@ -407,22 +407,61 @@ cmd_status() {
 
 cmd_doctor() { bash "$SCRIPT_DIR/doctor.sh"; }
 
+# ---------------------------------------------------------------------------
+# derive: parse the user request for verbs and emit a richer starter contract
+# than `init`. Derived criteria are heuristic — Claude should read the result
+# and refine, not treat it as final.
+# ---------------------------------------------------------------------------
+cmd_derive() {
+  local request="${1:-}"
+  [ -n "$request" ] || die "usage: audit.sh derive \"<original user request>\""
+  ensure_workdir
+  REQUEST="$request" CONTRACT_PATH="$CONTRACT" \
+    python3 "$SCRIPT_DIR/derive_contract.py"
+  log "wrote $CONTRACT — refine the derived criteria before running audit"
+  printf '%s\n' "$CONTRACT"
+}
+
+# ---------------------------------------------------------------------------
+# scan: read the latest session JSONL and emit a sweep report — banned-phrase
+# detection, swallowed-failure detection, sticky-constraint extraction.
+# Useful before a Stop hook fires, to surface what would be flagged.
+# ---------------------------------------------------------------------------
+cmd_scan() {
+  ensure_workdir
+  python3 "$SCRIPT_DIR/scan_session.py" --latest --out "$WORK_DIR/scan-findings.json" "$@" || true
+  if [ -f "$WORK_DIR/scan-findings.json" ]; then
+    python3 -c "
+import json, sys
+d = json.load(open('$WORK_DIR/scan-findings.json'))
+findings = d.get('findings', [])
+print(f'{len(findings)} finding(s) in scan-findings.json')
+for f in findings[:20]:
+    print(f\"  [{f.get('severity','?')}] {f.get('check','?')}: {f.get('detail','')[:100]}\")
+"
+  fi
+}
+
 usage() {
   cat <<EOF
 did-it-actually  — audit.sh
   init "<request>"   write a starter contract.yml for the user's request
+  derive "<request>" auto-derive criteria from the prompt's verbs (richer than init)
   run                evaluate the contract, write report.json, render prose
   render             re-render the most recent report
   status             print the most recent verdict
+  scan               sweep the latest Claude session JSONL for banned-phrase + swallowed-failure findings
   doctor             check that the skill is wired up correctly
 EOF
 }
 
 case "${1:-}" in
   init)   shift; cmd_init "$@" ;;
+  derive) shift; cmd_derive "$@" ;;
   run)    shift; cmd_run "$@" ;;
   render) cmd_render ;;
   status) cmd_status ;;
+  scan)   shift; cmd_scan "$@" ;;
   doctor) cmd_doctor ;;
   ""|-h|--help) usage ;;
   *) usage; exit 2 ;;

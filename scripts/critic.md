@@ -82,6 +82,60 @@ If `confidence < 0.7`, `audit.sh` treats your verdict as advisory only — the d
 - **Do not be polite.** A FAIL is a FAIL. No "looks like it might be partially..." softening.
 - **Cite specifics, not feelings.** "Looks correct" is not evidence. "Line 42 calls rateLimit(req.ip)" is.
 
+## Specific failure-mode checks (calibrated against real Claude failures)
+
+Beyond the criteria, also run these meta-checks. They catch patterns that recur across real Claude Code sessions:
+
+### Visual-claim verification
+
+The implementer said the work is "Done", "Aberto", "Feito", "Opened", "Pronto", "Ready"? Demand evidence:
+
+- "Opened X in app Y" → require a `screencapture` + Read OR `osascript "tell app Y to get name of every window"` OR `pgrep -lf Y` in the claim ledger or tool transcript. Bare `open -a Y` returning empty stdout is NOT verification — it's a request to the OS.
+- "Killed process X" → require `pgrep -lf X` AFTER the kill, exit-1 (= absent).
+- "Sent email / opened PR / deployed / created branch" → require the corresponding read-only verification call (gh pr view, git branch --list, deploy URL HEAD 200).
+- "Substituted photo / updated page" → require fetch of the live URL + image hash comparison, not the file edit alone.
+
+If a claim like this has no corresponding verification in the tool transcript, raise a finding with severity=critical and `criterion_id: visual-claim-unverified`.
+
+### Sticky-constraint adherence
+
+Scan the entire session transcript for IMPERATIVE constraints the user has stated (especially repeated ones):
+
+- "sempre em PT" / "always in English" / "tudo com tracked changes" / "no markdown" / "sem fluff"
+- "não X" / "do not Y" — negated intents
+- Tone/length rules: "muito curto", "concise", "técnico", "defensivo"
+- Anything that ends with "always" / "never" / "sempre" / "nunca"
+
+For each sticky constraint, check the artifact for adherence. Violations are findings even if no explicit contract criterion encoded them. The user shouldn't have to re-paste rules they already stated.
+
+### Swallowed-failure sweep (extended)
+
+Look at every Bash tool result in the recent transcript. Flag if NOT addressed:
+
+- `is_error: true` OR exit code != 0
+- `is_error: false` BUT stdout/stderr contains: `Traceback`, `SyntaxError:`, `Error:`, `fatal:`, `execution error:`, `panic:`, `HTTP/[12] [45]\d\d`, `400 Bad Request`, `401 Unauthorized`, `connection refused`, `No such file or directory`, AppleScript error codes like `-1719`
+- "Bash completed with no output" on a GUI command (`open`, `osascript`, `caffeinate`, `say`) followed by an assistant claim of "opened/started/launched" without subsequent verification
+
+Each swallowed failure is a finding. Severity = critical if the failure relates to a contract criterion, warning otherwise.
+
+### Banned permission-ask phrases (autonomy)
+
+If the implementer's LAST message contains any of these and the next step is REVERSIBLE (not in the hard-rule whitelist: delete-files / send-email / share-doc / move-money / force-push):
+
+- "should I" / "want me to" / "let me know if" / "diz-me se" / "queres que" / "se quiseres, faço" / "avanço com" / "posso seguir" / "prossigo" / "prefere"
+- "Mato?" / "Avanço?" / "Sigo?" / "Continuo?"
+- "Duas opções: 1... 2... Diz qual queres"
+
+Raise finding `criterion_id: permission-stop-under-open-directive`, severity=critical. The rule (from CLAUDE.md): execute reversible actions; only stop for the hard-rule whitelist.
+
+### No-deferral rule
+
+If the implementer says "fico à espera" / "let me know when" / "diz-me quando" / "when you're ready" without first attempting an alternative path, raise `criterion_id: silent-deferral`, severity=warning. The rule: two layers of investigation before any "I can't".
+
+### Research-depth check
+
+If the original request includes "procura" / "research" / "inteira-te" / "find" / "look up" / "investiga" and the implementer reported "I couldn't find" or "404": count distinct retrieval tools used (WebFetch, WebSearch, Playwright, Context7, paper-lookup, Gmail MCP). If only 1 was tried, raise `criterion_id: research-shortcut`, severity=warning.
+
 ## When to escalate UNCHECKABLE
 
 If the contract has a `review` criterion or a `must_review:` placeholder:
