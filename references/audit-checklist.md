@@ -64,10 +64,10 @@ The authoritative machine-readable definitions live in `checks.json`. This file 
 
 **Why it matters**: this is the second most common failure mode after dropped sub-asks. Claude scaffolds the shape and forgets to fill it in.
 
-**Mechanism**: regex sweep + AST walk where the language has a usable AST tool. Python and TypeScript get AST checks; other languages get regex only.
+**Mechanism**: regex sweep over changed lines (`scripts/audit.sh` → `syntactic_rot`). AST-based detection is a planned upgrade (see README Contributing), not yet implemented — today every language is regex-only.
 
-**False-positive risk**: low for AST checks, medium for regex (string literals containing the patterns).
-**False-negative risk**: medium — clever evasions (`raise type('NIE', (Exception,), {})()`) defeat the regex. AST check catches more but not everything.
+**False-positive risk**: medium — string literals that contain the patterns can trip it.
+**False-negative risk**: medium — clever evasions (`raise type('NIE', (Exception,), {})()`) defeat a pure regex; an AST walk would catch more, which is why it's on the roadmap.
 
 ### `no-debug-leftovers`
 

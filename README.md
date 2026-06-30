@@ -162,19 +162,18 @@ The skill is structurally hostile to the failure modes that make naive self-audi
 | Moving the goalposts mid-iteration | Contract SHA is recorded; mutation → `AUDIT_FAILED` |
 | Infinite "fix → re-audit" loops | Hard 3-iteration cap enforced by script, not by prompt |
 | Skipping the audit | Stop hook fires regardless of agent intent; `doctor` proves it's wired |
-| Stub bodies passing as work | AST walk catches `pass`/`unimplemented!()`/`TODO()` patterns beyond regex |
+| Stub bodies passing as work | Regex sweep on changed lines flags `NotImplementedError`/`unimplemented!()`/`TODO()` stubs |
 | Silenced tests | Diff vs pre-state catches *new* skips, not pre-existing ones |
 | Swallowed Bash failures | `scan_session.py` reads the session JSONL for unaddressed non-zero exits |
 
 ## Validation
 
-The skill ships with an eval harness (`tests/`) measuring recall, precision, and calibration against 9 synthetic failure-mode fixtures. Ship gates:
+The skill ships with an eval harness (`tests/`) measuring recall and precision against synthetic failure-mode fixtures. Four ship today — `missing-file`, `dropped-subask`, `stub-body`, and a `clean-control` (which must stay VERIFIED, guarding precision); `references/eval-harness.md` lists the further fixtures the harness is designed to grow into. Target gates:
 
 - recall(missing-file) ≥ 0.95
 - recall(dropped-subask) ≥ 0.95
 - recall(stub-body) ≥ 0.85
-- precision(NOT VERIFIED) ≥ 0.90
-- calibration(VERIFIED) ≥ 0.95
+- precision(NOT VERIFIED) ≥ 0.90 — `clean-control` must never trip
 - cost ≤ 5,000 tokens / 15 tool calls per audit
 
 ```bash
@@ -225,7 +224,7 @@ did-it-actually/
 Two things especially valuable:
 
 1. **New fixtures** — when a real Claude session produces a failure mode this skill doesn't catch, distill it into a fixture under `tests/fixtures/` and open a PR. The eval harness grows with the failure surface.
-2. **AST checks for new languages** — `references/checks.json` lists per-language stub-body AST checks. Adding Rust, Go, Kotlin, Swift, Ruby AST walks reduces false-negative rate on those ecosystems.
+2. **AST-based stub detection** — the rot scan is regex-only today, so clever evasions slip through (`raise type('NIE',(Exception,),{})()`). A real AST walk for Python/TypeScript (then Rust, Go, Kotlin, Swift, Ruby) would cut the false-negative rate; `references/checks.json` sketches the per-language targets.
 
 Keep `SKILL.md` under ~200 lines. Detail goes in `references/`.
 

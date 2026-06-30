@@ -31,27 +31,6 @@ DONE_PATTERNS = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# Banned-phrase permission-asks — Pedro's CLAUDE.md forbids these on reversible
-# actions. Calibrated against real session patterns where Pedro had to re-paste
-# the standing "no permission stops" rule.
-BANNED_PHRASE_PATTERNS = re.compile(
-    r"(?:"
-    r"\bshould I\b|\bwant me to\b|\blet me know if\b|\bdiz-me se\b|\bqueres que\b"
-    r"|\bse quiseres,?\s+faço\b|\bavanço com\b|\bposso seguir\b|\bprossigo\b"
-    r"|\bMato\?|\bSigo\?|\bContinuo\?|\bDuas opções\s*:\s*\d"
-    r"|\bdo you want me to\b"
-    r")",
-    re.IGNORECASE,
-)
-
-# Hard-rule whitelist — these legitimately allow a permission stop.
-HARD_RULE_WHITELIST = re.compile(
-    r"\b(delete\s+file|eliminar?\s+ficheiro|rm\s+-rf|send\s+email|envia(r)?\s+email"
-    r"|share\s+doc|partilha(r)?\s+(doc|documento)|move\s+money|transferência"
-    r"|trade|force[- ]push|amend|--no-verify)\b",
-    re.IGNORECASE,
-)
-
 MULTI_STEP_TOOL_THRESHOLD = 3
 MULTI_STEP_FILE_THRESHOLD = 2
 
@@ -123,28 +102,9 @@ def main() -> None:
     text = last_assistant_text(events)
     skill_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    # Check #1: banned permission-ask phrases in the last assistant message.
-    # Calibrated against real session failures. This check fires REGARDLESS of
-    # whether the session was multi-step.
-    if BANNED_PHRASE_PATTERNS.search(text) and not HARD_RULE_WHITELIST.search(text):
-        m = BANNED_PHRASE_PATTERNS.search(text)
-        snippet = text[max(0, m.start() - 60):min(len(text), m.end() + 60)].strip()
-        response = {
-            "decision": "block",
-            "reason": (
-                f"did-it-actually [banned-phrase-detected]: your last message contains a "
-                f"permission-ask phrase (...{snippet!r}...) on what looks like a reversible "
-                f"action. Per CLAUDE.md, the only acceptable stops are: delete files, send "
-                f"email, share docs, move money, force-push, amend, --no-verify. Either "
-                f"execute the next step now, or — if the next step is genuinely in the "
-                f"hard-rule whitelist — name it explicitly so this hook can see why you're "
-                f"stopping."
-            ),
-        }
-        print(json.dumps(response))
-        return
-
-    # Check #2: multi-step done-claim without an audit having run.
+    # This hook has ONE job: a multi-step done-claim that skipped the self-audit.
+    # (Permission-ask policing belongs to a different concern and is intentionally
+    # out of scope here — this skill verifies request fidelity, nothing else.)
     if not DONE_PATTERNS.search(text):
         sys.exit(0)  # no completion signal; nothing to do
 

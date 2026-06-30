@@ -1,0 +1,32 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install runtime deps
+        run: python3 -m pip install --quiet pyyaml
+      - name: Lint shell scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          shellcheck --severity=warning install.sh hooks/install_hook.sh \
+            scripts/audit.sh scripts/snapshot.sh scripts/claim.sh \
+            scripts/doctor.sh tests/run-evals.sh
+      - name: Syntax-check hook + scripts
+        run: |
+          python3 -c "import ast; ast.parse(open('hooks/stop_self_audit.py').read())"
+          python3 -c "import ast; ast.parse(open('scripts/scan_session.py').read())"
+          python3 -c "import ast; ast.parse(open('scripts/derive_contract.py').read())"
+          python3 -c "import ast; ast.parse(open('scripts/render.py').read())"
+      - name: Run eval harness (fixtures)
+        run: bash tests/run-evals.sh
+      - name: Doctor (install + wiring self-check)
+        run: bash scripts/doctor.sh

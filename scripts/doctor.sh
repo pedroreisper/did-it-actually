@@ -71,7 +71,7 @@ fi
 printf '\nEnd-to-end smoke:\n'
 SMOKE_DIR="$(mktemp -d -t didit-doctor-XXXXXX)"
 (
-  cd "$SMOKE_DIR"
+  cd "$SMOKE_DIR" || exit 1
   printf 'placeholder\n' > placeholder.txt
   if bash "$SCRIPT_DIR/audit.sh" init "smoke test request" >/dev/null 2>&1 && [ -f .did-it-actually/contract.yml ]; then
     result ok "audit.sh init writes contract.yml"

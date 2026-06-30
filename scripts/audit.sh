@@ -4,12 +4,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORK_DIR="${DIDIT_WORK_DIR:-.did-it-actually}"
 CONTRACT="$WORK_DIR/contract.yml"
 CLAIMS="$WORK_DIR/claims.jsonl"
 PRE="$WORK_DIR/pre.json"
-POST="$WORK_DIR/post.json"
 REPORT="$WORK_DIR/report.json"
 
 die() { printf 'audit.sh: %s\n' "$*" >&2; exit 1; }
@@ -307,7 +305,19 @@ missing_claim = os.environ.get('MISSING_CLAIMS','').strip()
 if phantom:
     critical_fail = True
 
-if critical_fail:
+# A contract whose criteria were never terminally evaluated must NOT pass. The
+# default `init`/`derive` contract is a single review criterion that this script
+# marks SKIP/delegated-to-critic — the critic (a fresh sub-agent) has to run
+# before any pass. Without this guard, `audit.sh run` on a fresh contract would
+# emit a hollow VERIFIED having checked nothing. Pending-critic ≠ verified.
+terminally_evaluated = sum(1 for r in results if r['status'] in ('PASS', 'FAIL'))
+pending_critic = any(
+    r['status'] == 'SKIP' and 'critic' in (r.get('evidence') or '')
+    for r in results
+)
+not_evaluated = (terminally_evaluated == 0)
+
+if critical_fail or not_evaluated or pending_critic:
     verdict = 'NOT VERIFIED'
 elif warning_fail:
     verdict = 'VERIFIED WITH WARNINGS'
@@ -317,6 +327,8 @@ else:
 reason = []
 if critical_fail: reason.append('one or more critical criteria failed')
 if phantom: reason.append(f'phantom edits: {phantom.splitlines()[:3]}')
+if not_evaluated: reason.append('no criterion was terminally evaluated (all SKIP/delegated) — decompose the contract or run the critic')
+if pending_critic: reason.append('review criteria are delegated to the fresh-context critic, which has not run yet — spawn it (scripts/critic.md), fold in its verdict, then re-run')
 if warning_fail: reason.append('warnings present')
 if not reason: reason.append('all criteria passed; no rot detected')
 

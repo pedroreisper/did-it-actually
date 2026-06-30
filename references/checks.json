@@ -86,7 +86,7 @@
       "category": "syntactic-rot",
       "intent": "no NotImplementedError / 'not implemented' / Kotlin TODO() / Rust unimplemented!() / panic!('unimplemented')",
       "evaluator": "deterministic",
-      "tool": "grep -EnH + AST walk where possible",
+      "tool": "regex sweep over changed lines (AST walk is roadmap, not yet implemented)",
       "patterns": [
         "raise\\s+NotImplementedError",
         "throw\\s+new\\s+Error\\(['\"]not\\s*implemented",

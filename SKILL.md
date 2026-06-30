@@ -47,7 +47,7 @@ Run `bash scripts/snapshot.sh pre`. This writes file hashes, test counts, lint c
 
 ## Step 3 — Do the work (if not already done)
 
-Standard tool calls. The only addition: before each Edit/Write/Bash that delivers part of the contract, append a line to `.did-it-actually/claims.jsonl` via `bash scripts/claim.sh <op> <args>`. The hook in `hooks/prefix_claim.py` can do this automatically — `bash hooks/install_hook.sh` once and forget.
+Standard tool calls. The only addition: before each Edit/Write/Bash that delivers part of the contract, append a line to `.did-it-actually/claims.jsonl` via `bash scripts/claim.sh <op> <args>`. This ledger is optional — when it's absent, `scripts/scan_session.py` reconstructs the claims from the session JSONL at audit time, so phantom-edit detection still works without per-call bookkeeping.
 
 ## Step 4 — Snapshot post-state + run the critic
 
@@ -56,19 +56,23 @@ bash scripts/snapshot.sh post
 bash scripts/audit.sh run
 ```
 
-`audit.sh run` does five things in order:
+`audit.sh run` is a deterministic bash/python driver. It does four things in order:
 
 1. Validates the claim ledger against `git diff HEAD` — every claimed change must show up; every actual change must have been claimed (no phantom edits).
-2. For each contract criterion, evaluates the predicate deterministically (existence/regex/cmd). Records PASS/FAIL with evidence.
+2. For each contract criterion, evaluates the predicate deterministically (existence/regex/cmd). Records PASS/FAIL with evidence. **`type: review` criteria it cannot decide alone are marked SKIP/`delegated-to-critic`.**
 3. Runs the syntactic-rot pass (TODO/stub/debug-leftover scan on changed files only — see `references/checks.json`).
-4. Spawns the fresh-context critic via Task tool with the prompt at `scripts/critic.md`. The critic returns a JSON object with `findings[]` and a `confidence` score.
-5. Composes everything into `.did-it-actually/report.json` and the prose render.
+4. Composes everything into `.did-it-actually/report.json` and the prose render.
 
-The verdict is a pure function of the report:
+A bash script cannot call the Task tool, so **it does not spawn the critic itself**. When the report contains any `delegated-to-critic` criterion the verdict comes back `NOT VERIFIED` with reason *"review criteria pending critic"*. That is your cue to spawn it:
 
-- All criteria PASS + zero ❌ findings + critic confidence ≥0.8 → `VERIFIED`
+- **You** spawn the fresh-context critic via the Task tool (`general-purpose` subagent_type) with the prompt at `scripts/critic.md`, handing it ONLY the contract, the claims ledger, and `git diff HEAD`.
+- Fold the critic's per-criterion PASS/FAIL + `confidence` back into the contract (turn each delegated criterion into a concrete `content`/`command` check, or record the critic's verdict), then re-run `audit.sh run`.
+
+The verdict is then a pure function of the report:
+
+- Every criterion terminally PASS + zero ❌ findings + no criterion left delegated → `VERIFIED`
 - Any ⚠️ findings but no ❌ → `VERIFIED WITH WARNINGS`
-- Any ❌ (failed criterion, phantom edit, missing file, failing test, critic confidence <0.8) → `NOT VERIFIED`
+- Any ❌ (failed criterion, phantom edit, missing file, failing test), OR nothing terminally evaluated, OR a criterion still delegated to a critic that hasn't run → `NOT VERIFIED`
 
 ## Step 5 — Act on the report
 
